@@ -19,14 +19,16 @@
     </div>
 
     <div>
-      <audio :src="audioSrc" id="player" ref="player" type="audio/mpeg" controls hidden></audio>
+      <div v-if="audioSrc">
+        <audio :src="audioSrc" id="player" ref="player" type="audio/mpeg" controls hidden></audio>
+      </div>
       <canvas ref="canvas"></canvas>
     </div>
   </section>
 </template>
 
 <script>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import { useAVLine, useAVBars } from "vue-audio-visual";
 import axios from "axios";
 
@@ -35,51 +37,78 @@ export default {
 
   setup() {
     const player = ref(null)
-const canvas = ref(null)
-let audioSrc = ref(null)
-let action = ref('')
-let output = ref('')
+    const canvas = ref(null)
+    let audioSrc = ref(null)
+    let action = ref('')
+    let output = ref('')
 
-useAVLine(player, canvas, {
-  src: audioSrc,
-  canvasWidth: 1000,
-  canvasHeight: 1000,
-  canvWidth: 100,
-  barWidth: 5,
-  barColor: 'lime'
-})
+    useAVLine(player, canvas, {
+      src: audioSrc,
+      canvasWidth: 1000,
+      canvasHeight: 1000,
+      canvWidth: 100,
+      barWidth: 5,
+      barColor: 'lime'
+    })
+    onMounted(() => {
+      getMicrophone()
+    })
 
-const handleSpeech = () => {
-    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var recognition = new SpeechRecognition();
+    const getMicrophone = () => {
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(function(stream) {
+        console.log('Page accessed microphone successfully!');
+        if (audioSrc.value) {
+          stream = audioSrc.value
+        }
+      })
+      .catch(function(err) {
+        console.log('You did not let the page access the microphone', err);
+      });
+  }
 
-    recognition.onstart = () => { action.value = "Listening for inquiry..." };
-    
-    recognition.onspeechend = () => {
+    const handleSpeech = () => {
+      var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
+      var recognition = new SpeechRecognition();
+
+      recognition.onstart = () => { action.value = "Listening for inquiry..." };
+      console.log(recognition, Error)
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error)
+        if(event.error == 'no-speech') {
+          action.value = "No speech was detected. Try again.";
+          console.log(action.value, audioSrc.value, player.value)  
+        };
+      }
+        
+      recognition.onspeechend = () => {
         action.value = "You were quiet for a while so voice recognition turned itself off.";
         recognition.stop();
-    }
-  
-    recognition.onresult = async (event) => {
-      var transcript = event.results[0][0].transcript;
+      }
+      
+      recognition.onresult = async (event) => {
+        var transcript = event.results[0][0].transcript;
         output.value = transcript
 
         try {
           let res = await axios.post('http://localhost:5000/api/talk-to-gpt', {
-            text: event.results[0][0].transcript
+            text: transcript,
           })
 
           if (res.data) {
-            audioSrc.value = `/voice/${res.data}.mp3`
+            action.value = "GPT-3 is thinking..."
+            audioSrc.value = res.data
+            if (player.value) {
             setTimeout(() => { player.value.play() }, 500)
+            }
           }
         } catch (err) {
           console.log(err)
         }
-    };
-    recognition.start();
-}
+      };
 
+      recognition.start();
+    }
 
     return {
       handleSpeech,

@@ -1,22 +1,31 @@
 const express = require('express');
+const axios = require('axios').default;
 const app = express();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 
-
-import OpenAI from "openai";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+require('dotenv').config();
 
 const AWS = require('aws-sdk');
-AWS.config.loadFromPath('awsConfig.json');
 
-app.use(bodyParser.json());
+import OpenAI from 'openai';
+
+const apiKey = process.env.OPENAI_API_KEY;
+
+const openai = new OpenAI({
+  apiKey: apiKey
+});
+
+const client = axios.create({
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+  }
+});
+
+app.use(express.json());
 app.use(cors());
-app.post('api/talk-to-gpt', async (req, res) => {
+client.post('/api/talk-to-gpt', async (req, res) => {
 
   const completion = await openai.completions.create({
     model: "text-davinci-003",
@@ -50,7 +59,7 @@ app.post('api/talk-to-gpt', async (req, res) => {
     const filePath = '../public/voice/';
     const fileName = `${num}.mp3`;
 
-    fs.writeFile(filePath + fileName, audioStream, function (err) {
+    fs.writeFile(filePath + fileName, audioStream, (err) => {
       if (err) {
         console.error(err);
       } else {
